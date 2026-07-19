@@ -1,0 +1,49 @@
+# SSF transmitter demo: PingFederate (module merged into pf-runtime.war) + the ID Partners Identity
+# Object Model store (Postgres JSONB) as the transmitter's persistence (storeDialect=ldm).
+#
+#   cp .env.example .env       # fill in the Ping DevOps credentials (licensing)
+#   docker compose up -d --build
+#   ./scripts/bootstrap-pf.sh  # one-time OAuth config via the admin API
+#   ./scripts/probe-demo.sh    # the end-to-end walk
+services:
+  ldm-store:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ldm
+      POSTGRES_USER: ldm
+      POSTGRES_PASSWORD: ldm
+    volumes:
+      # 01 = the Identity Object Model DDL, 02 = the shared-signals (SSF) migration
+      - ./ldm-store/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ldm -d ldm"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  pingfederate:
+    build: ./pf
+    depends_on:
+      ldm-store:
+        condition: service_healthy
+    env_file:
+      - .env    # PING_IDENTITY_DEVOPS_USER / PING_IDENTITY_DEVOPS_KEY (licensing; never commit)
+    environment:
+      PING_IDENTITY_ACCEPT_EULA: "YES"
+      PING_IDENTITY_PASSWORD: "2FederateM0re"   # initial admin (hook 83-configure-admin)
+      # ── SSF transmitter (env-based config; OIDF_SSF_ISSUER turns it on at boot) ──
+      OIDF_SSF_ISSUER: "https://localhost:19031"
+      OIDF_SSF_STORE_DIALECT: "ldm"
+      OIDF_SSF_JDBC_URL: "jdbc:postgresql://ldm-store:5432/ldm"
+      OIDF_SSF_JDBC_USERNAME: "ldm"
+      OIDF_SSF_JDBC_PASSWORD: "ldm"
+      # in-container plain-HTTP introspection (avoids the self-signed runtime cert)
+      OIDF_SSF_INTROSPECTION_ENDPOINT: "http://127.0.0.1:9080/as/introspect.oauth2"
+      OIDF_SSF_INTROSPECTION_CLIENT_ID: "ssf-receiver"
+      OIDF_SSF_INTROSPECTION_CLIENT_SECRET: "ssf-demo-secret-123"
+    ports:
+      - "19031:9031"  # runtime (https)
+      - "29080:9080"  # runtime (http)
+      - "19999:9999"  # admin console / admin API (https)
