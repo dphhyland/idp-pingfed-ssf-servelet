@@ -99,6 +99,40 @@ curl -sk -X POST "$BASE/ssf/poll?stream_id=$SID" "${AUTH[@]}" -d "{\"ack\": $ACK
 curl -sk -X DELETE "$BASE/ssf/streams?stream_id=$SID" "${AUTH[@]}" -o /dev/null
 pass "acked + deleted"
 
+echo "== 11. LOOPBACK PUSH: transmitter -> its own receiver (live RFC 8935) =="
+PUSH_TOKEN="loopback-push-token-456"
+pstream="$(curl -sk -X POST "$BASE/ssf/streams" "${AUTH[@]}" -d "{
+  \"aud\": \"https://receiver-loopback.example.com\",
+  \"delivery\": {\"method\": \"urn:ietf:rfc:8935\",
+                \"endpoint_url\": \"http://127.0.0.1:9080/ssf/receiver/events\",
+                \"authorization_header\": \"Bearer $PUSH_TOKEN\"},
+  \"events_requested\": [\"$SESSION_EVT\"]}")"
+PSID="$(echo "$pstream" | jq -r '.stream_id // empty')"
+[[ -n "$PSID" ]] || fail "push stream create: $pstream"
+curl -sk -X POST "$BASE/ssf/subjects:add" "${AUTH[@]}" \
+  -d "{\"stream_id\":\"$PSID\",\"subject\":{\"format\":\"iss_sub\",\"iss\":\"$ISS\",\"sub\":\"carol\"}}" -o /dev/null
+IDTOK2="$(python3 - "$ISS" <<'EOF2'
+import base64, json, sys
+b64 = lambda o: base64.urlsafe_b64encode(json.dumps(o).encode()).rstrip(b"=").decode()
+print(b64({"alg": "none"}) + "." + b64({"iss": sys.argv[1], "sub": "carol"}) + ".")
+EOF2
+)"
+curl -sk -o /dev/null "$BASE/idp/init_logout.openid?id_token_hint=$IDTOK2"
+echo "   waiting for the push executor to deliver (tick 5s)..."
+delivered=""
+for i in $(seq 1 12); do
+  sleep 3
+  rx="$(curl -sk "$BASE/ssf/receiver/events" -H "Authorization: Bearer $PUSH_TOKEN")"
+  if echo "$rx" | jq -e '.received[] | select(.sub_id.sub == "carol")' >/dev/null 2>&1; then delivered=yes; break; fi
+done
+[[ -n "$delivered" ]] || fail "receiver never got carol's session-revoked SET: $rx"
+echo "$rx" | jq -e '.received[0].event_types | index("'"$SESSION_EVT"'")' >/dev/null \
+  || fail "received SET is not session-revoked: $rx"
+pass "PUSH delivered end-to-end: logout -> transmitter push (RFC 8935) -> receiver verified + dispatched"
+echo "   receiver log line (grant revocation action):"
+docker compose logs pingfederate 2>&1 | grep -oE "SSF receiver: revoked [0-9]+ grant.*carol.*" | tail -1 || true
+curl -sk -X DELETE "$BASE/ssf/streams?stream_id=$PSID" "${AUTH[@]}" -o /dev/null
+
 echo
 echo "== DEMO COMPLETE: metadata, auth, stream mgmt, SCIM provisioning, verification, logout->CAEP,"
-echo "   deprovision->RISC, LDM persistence, and restart durability all verified =="
+echo "   deprovision->RISC, LDM persistence, restart durability, and LIVE PUSH->RECEIVER all verified =="

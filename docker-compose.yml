@@ -43,6 +43,11 @@ services:
       OIDF_SSF_INTROSPECTION_ENDPOINT: "http://127.0.0.1:9080/as/introspect.oauth2"
       OIDF_SSF_INTROSPECTION_CLIENT_ID: "ssf-receiver"
       OIDF_SSF_INTROSPECTION_CLIENT_SECRET: "ssf-demo-secret-123"
+      # ── SSF receiver (loopback: this PF accepts SETs from ITSELF over in-container HTTP) ──
+      OIDF_SSF_RECEIVER_EXPECTED_ISSUER: "https://localhost:19031"
+      OIDF_SSF_RECEIVER_JWKS_URL: "http://127.0.0.1:9080/pf/JWKS"
+      OIDF_SSF_RECEIVER_AUDIENCE: "https://receiver-loopback.example.com"
+      OIDF_SSF_RECEIVER_ENDPOINT_AUTH_TOKEN: "loopback-push-token-456"
     ports:
       - "19031:9031"  # runtime (https)
       - "29080:9080"  # runtime (http)
