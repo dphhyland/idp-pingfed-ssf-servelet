@@ -52,3 +52,16 @@ services:
       - "19031:9031"  # runtime (https)
       - "29080:9080"  # runtime (http)
       - "19999:9999"  # admin console / admin API (https)
+
+  ssf-demo-ui:
+    build: ./ui
+    depends_on:
+      - pingfederate
+    environment:
+      PF_INTERNAL: "https://pingfederate:9031"
+      ISSUER: "https://localhost:19031"
+      CLIENT_ID: "ssf-receiver"
+      CLIENT_SECRET: "ssf-demo-secret-123"
+      PUSH_TOKEN: "loopback-push-token-456"
+    ports:
+      - "18080:8080"

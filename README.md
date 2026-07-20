@@ -21,8 +21,12 @@ Identity Object Model** (`idp-scim-service`) as Postgres JSONB object-class entr
 cp .env.example .env        # fill in your Ping DevOps credentials (licensing)
 docker compose up -d --build
 ./scripts/bootstrap-pf.sh   # one-time: license agreement, admin, ATM, mapping, ssf.manage scope, receiver client
-./scripts/probe-demo.sh     # the end-to-end walk (all 10 stages)
+./scripts/probe-demo.sh     # the end-to-end walk
 ```
+
+Then open the **demo UI**: http://localhost:18080 — a single-page walk (metadata → stream → SCIM
+subject → events → poll → loopback push→receiver) through a thin proxy that injects the `ssf.manage`
+bearer; the browser never handles credentials. PF admin console: https://localhost:19999/pingfederate/app.
 
 The probe proves, in order: transmitter metadata → PF-issued bearer (client_credentials `ssf.manage`,
 validated by RFC 7662 introspection) → stream CRUD → **SCIM provisioning drives stream subjects** →

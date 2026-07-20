@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PingFederate · Shared Signals (SSF) demo</title>
+<style>
+  :root { --bg:#0e1116; --card:#161b22; --line:#2d333b; --fg:#e6edf3; --dim:#8b949e;
+          --accent:#4493f8; --ok:#3fb950; --warn:#d29922; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding:20px 24px 8px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  header p { color:var(--dim); margin:0; font-size:13px; }
+  main { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:14px; padding:18px 24px 40px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  h2 { font-size:14px; margin:0 0 8px; }
+  h2 .n { display:inline-block; width:20px; height:20px; border-radius:50%; background:var(--accent);
+          color:#fff; text-align:center; line-height:20px; font-size:12px; margin-right:7px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px; padding:6px 12px;
+           font-size:13px; cursor:pointer; margin:2px 4px 2px 0; }
+  button.alt { background:#30363d; }
+  button.warn { background:var(--warn); color:#111; }
+  input { background:#0d1117; color:var(--fg); border:1px solid var(--line); border-radius:6px;
+          padding:5px 8px; font-size:13px; width:110px; }
+  pre { background:#0d1117; border:1px solid var(--line); border-radius:6px; padding:10px;
+        font-size:11.5px; overflow:auto; max-height:260px; white-space:pre-wrap; word-break:break-word; margin:8px 0 0; }
+  .tag { font-size:11px; color:var(--dim); }
+  .ok { color:var(--ok); } .sid { color:var(--warn); font-family:monospace; font-size:12px; }
+  .events pre { max-height:340px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Shared Signals Framework demo <span class="tag">— PingFederate transmitter + receiver · LDM store</span></h1>
+  <p>Walk the SSF 1.0 flow: metadata → stream → subject → events → poll — then the loopback push
+     (transmitter → its own receiver, RFC 8935). All calls go through a thin proxy that injects the
+     <code>ssf.manage</code> bearer; the browser never handles credentials.</p>
+</header>
+<main>
+
+<section>
+  <h2><span class="n">1</span>Transmitter metadata</h2>
+  <button onclick="show('m', get('/api/metadata'))">GET /.well-known/ssf-configuration</button>
+  <pre id="m">–</pre>
+</section>
+
+<section>
+  <h2><span class="n">2</span>Poll stream</h2>
+  <button onclick="createStream()">Create poll stream</button>
+  <button class="alt" onclick="show('s', get('/api/streams'))">List streams</button>
+  <button class="warn" onclick="delStream()">Delete</button>
+  <div class="tag">stream: <span class="sid" id="sid">none</span></div>
+  <pre id="s">–</pre>
+</section>
+
+<section>
+  <h2><span class="n">3</span>Subject (SCIM provisioning)</h2>
+  <input id="user" value="bob">
+  <button onclick="scim(true)">Provision into stream</button>
+  <button class="warn" onclick="scim(false)">Disable (→ RISC)</button>
+  <pre id="u">–</pre>
+</section>
+
+<section>
+  <h2><span class="n">4</span>Emit events</h2>
+  <button onclick="show('e', post('/api/verify', {stream_id:S.sid, state:'ui-'+Date.now()}))">Verification SET</button>
+  <button onclick="logout()">Logout <b id="who">bob</b> (→ CAEP session-revoked)</button>
+  <pre id="e">–</pre>
+</section>
+
+<section class="events">
+  <h2><span class="n">5</span>Poll the stream (RFC 8936)</h2>
+  <button onclick="poll(false)">Poll</button>
+  <button class="alt" onclick="poll(true)">Poll + ack all</button>
+  <pre id="p">–</pre>
+</section>
+
+<section class="events">
+  <h2><span class="n">6</span>Loopback push → receiver (RFC 8935)</h2>
+  <button onclick="loopback()">Create push stream → own receiver</button>
+  <button onclick="logoutCarol()">Logout carol</button>
+  <button class="alt" onclick="show('r', get('/api/received'))">Show received</button>
+  <div class="tag">push stream: <span class="sid" id="psid">none</span> · receiver auto-refreshes after logout</div>
+  <pre id="r">–</pre>
+</section>
+
+</main>
+<script>
+const S = { sid:null, psid:null };
+const $ = id => document.getElementById(id);
+const j = async r => { try { return await r.json(); } catch { return { raw: await r.text() }; } };
+const get  = p => fetch(p).then(j);
+const post = (p,b) => fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(j);
+const b64d = s => { s=s.replace(/-/g,'+').replace(/_/g,'/'); return JSON.parse(atob(s+'='.repeat((4-s.length%4)%4))); };
+const decodeSets = d => { if (d && d.sets) d.decoded = Object.fromEntries(
+  Object.entries(d.sets).map(([k,v])=>[k, b64d(v.split('.')[1])])); return d; };
+async function show(id, p){ $(id).textContent = JSON.stringify(await p, null, 1); }
+
+const SEV='https://schemas.openid.net/secevent/caep/event-type/session-revoked';
+const DIS='https://schemas.openid.net/secevent/risc/event-type/account-disabled';
+
+async function createStream(){
+  const d = await post('/api/streams', {aud:'https://receiver.example.com',
+    delivery:{method:'urn:ietf:rfc:8936'}, events_requested:[SEV, DIS]});
+  S.sid = d.stream_id || S.sid; $('sid').textContent = S.sid || 'error';
+  $('s').textContent = JSON.stringify(d, null, 1);
+}
+async function delStream(){ if(!S.sid) return; await post('/api/delete-stream',{stream_id:S.sid});
+  $('s').textContent='deleted '+S.sid; S.sid=null; $('sid').textContent='none'; }
+async function scim(active){
+  const u = $('user').value || 'bob'; $('who').textContent = u;
+  const body = {schemas:['urn:ietf:params:scim:schemas:core:2.0:User',
+      'urn:ietf:params:scim:schemas:extension:ssf:2.0:Subject'], userName:u, active};
+  if (active) body['urn:ietf:params:scim:schemas:extension:ssf:2.0:Subject'] = {streams:[S.sid]};
+  show('u', post('/api/scim', body));
+}
+async function logout(){ show('e', post('/api/logout', {sub: $('user').value || 'bob'})
+  .then(()=>({logged_out: $('user').value||'bob', hint:'now poll (step 5)'}))); }
+async function poll(ack){
+  let d = decodeSets(await post('/api/poll', {stream_id:S.sid, maxEvents:20, returnImmediately:true}));
+  if (ack && d.sets && Object.keys(d.sets).length)
+    await post('/api/poll', {stream_id:S.sid, ack:Object.keys(d.sets)});
+  $('p').textContent = JSON.stringify(d, null, 1);
+}
+async function loopback(){
+  const d = await post('/api/streams', {aud:'https://receiver-loopback.example.com',
+    delivery:{method:'urn:ietf:rfc:8935', endpoint_url:'http://127.0.0.1:9080/ssf/receiver/events',
+              authorization_header:'Bearer loopback-push-token-456'},
+    events_requested:[SEV]});
+  S.psid = d.stream_id; $('psid').textContent = S.psid || 'error';
+  if (S.psid) await post('/api/subjects', {stream_id:S.psid,
+    subject:{format:'iss_sub', iss:(await get('/api/config')).issuer, sub:'carol'}});
+  $('r').textContent = 'push stream ready — click "Logout carol", delivery lands within ~5s';
+}
+async function logoutCarol(){
+  await post('/api/logout', {sub:'carol'});
+  $('r').textContent='logout sent — waiting for the push executor…';
+  let tries = 0;
+  const t = setInterval(async ()=>{
+    const d = await get('/api/received');
+    if ((d.received||[]).some(e=>e.sub_id && e.sub_id.sub==='carol') || ++tries>10){
+      clearInterval(t); $('r').textContent = JSON.stringify(d, null, 1);
+    }
+  }, 3000);
+}
+show('m', get('/api/metadata'));
+</script>
+</body>
+</html>
