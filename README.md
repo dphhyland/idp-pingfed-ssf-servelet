@@ -15,6 +15,18 @@ Identity Object Model** (`idp-scim-service`) as Postgres JSONB object-class entr
 └────────────────────────────┘         └──────────────────────────────┘
 ```
 
+## Public demo (Railway)
+
+The same stack runs publicly on Railway (project `ssf-demo`):
+
+- **Demo UI**: https://ssf-demo-ui-production.up.railway.app
+- **Transmitter metadata**: https://pingfederate-ssf-production.up.railway.app/.well-known/ssf-configuration
+  (Railway's HTTPS edge terminates TLS onto PF's plain-HTTP runtime listener on 9080)
+- **PF admin API/console**: `https://sakura.proxy.rlwy.net:10816` (TCP proxy → 9999; credentials in the
+  `pingfederate-ssf` service variables — `PF_ADMIN_PW_DEMO`)
+- Store: the project's Postgres with the Identity Object Model schema; licensing DevOps-fetched at boot;
+  client secret / push token are per-deploy randoms held in Railway service variables, never in git.
+
 ## Run it
 
 ```sh
