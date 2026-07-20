@@ -93,6 +93,20 @@ class Handler(BaseHTTPRequestHandler):
         b = self._body()
         if self.path == "/api/streams":
             self._send(*pf("POST", "/ssf/streams", body=b, bearer=token()))
+        elif self.path == "/api/loopback-stream":
+            # server-side so the push bearer token never reaches the browser
+            body = {
+                "aud": "https://receiver-loopback.example.com",
+                "delivery": {
+                    "method": "urn:ietf:rfc:8935",
+                    "endpoint_url": "http://127.0.0.1:9080/ssf/receiver/events",
+                    "authorization_header": "Bearer " + PUSH_TOKEN,
+                },
+                "events_requested": b.get("events_requested") or [
+                    "https://schemas.openid.net/secevent/caep/event-type/session-revoked"
+                ],
+            }
+            self._send(*pf("POST", "/ssf/streams", body=body, bearer=token()))
         elif self.path == "/api/subjects":
             self._send(*pf("POST", "/ssf/subjects:add", body=b, bearer=token()))
         elif self.path == "/api/scim":

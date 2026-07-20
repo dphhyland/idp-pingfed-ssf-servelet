@@ -6,7 +6,7 @@
 set -euo pipefail
 BASE="${PF_BASE:-https://localhost:19031}"
 ISS="${OIDF_SSF_ISSUER:-https://localhost:19031}"
-SECRET="ssf-demo-secret-123"
+SECRET="${SSF_CLIENT_SECRET:-ssf-demo-secret-123}"
 SESSION_EVT="https://schemas.openid.net/secevent/caep/event-type/session-revoked"
 DISABLED_EVT="https://schemas.openid.net/secevent/risc/event-type/account-disabled"
 command -v jq >/dev/null || { echo "needs jq"; exit 1; }

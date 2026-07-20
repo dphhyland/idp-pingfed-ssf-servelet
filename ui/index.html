@@ -125,10 +125,7 @@ async function poll(ack){
   $('p').textContent = JSON.stringify(d, null, 1);
 }
 async function loopback(){
-  const d = await post('/api/streams', {aud:'https://receiver-loopback.example.com',
-    delivery:{method:'urn:ietf:rfc:8935', endpoint_url:'http://127.0.0.1:9080/ssf/receiver/events',
-              authorization_header:'Bearer loopback-push-token-456'},
-    events_requested:[SEV]});
+  const d = await post('/api/loopback-stream', {events_requested:[SEV]});
   S.psid = d.stream_id; $('psid').textContent = S.psid || 'error';
   if (S.psid) await post('/api/subjects', {stream_id:S.psid,
     subject:{format:'iss_sub', iss:(await get('/api/config')).issuer, sub:'carol'}});

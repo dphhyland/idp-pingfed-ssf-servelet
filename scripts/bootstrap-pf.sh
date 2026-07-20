@@ -5,6 +5,7 @@
 set -euo pipefail
 ADMIN="${PF_ADMIN_BASE:-https://localhost:19999}/pf-admin-api/v1"
 PW="${PF_ADMIN_PW:-2FederateM0re}"
+CLIENT_SECRET="${SSF_CLIENT_SECRET:-ssf-demo-secret-123}"
 A() { curl -sk -u "administrator:$PW" -H 'X-XSRF-Header: PingFederate' -H 'Content-Type: application/json' "$@"; }
 
 echo "== waiting for the PF admin API =="
@@ -79,7 +80,7 @@ else
   A -X POST "$ADMIN/oauth/clients" -d '{
     "clientId": "ssf-receiver", "name": "SSF Receiver (demo)", "enabled": true,
     "grantTypes": ["CLIENT_CREDENTIALS", "ACCESS_TOKEN_VALIDATION"],
-    "clientAuth": {"type": "SECRET", "secret": "ssf-demo-secret-123"},
+    "clientAuth": {"type": "SECRET", "secret": "'"$CLIENT_SECRET"'"},
     "restrictScopes": true, "restrictedScopes": ["ssf.manage"],
     "defaultAccessTokenManagerRef": {"id": "demoATM"}
   }' | grep -q '"clientId":"ssf-receiver"' && echo "   created" || { echo "   FAILED"; exit 1; }
