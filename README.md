@@ -1,8 +1,10 @@
-# SSF transmitter demo — PingFederate + Identity Object Model store
+# SSF transmitter + receiver demo — PingFederate + Identity Object Model store
 
 A self-contained docker-compose demo of the **pf-oidf-modules SSF (Shared Signals Framework 1.0)
-transmitter** running inside a real PingFederate 13.0.3, persisting its state in the **ID Partners
-Identity Object Model** (`idp-scim-service`) as Postgres JSONB object-class entries.
+transmitter and receiver** running inside a real PingFederate 13.0.3, persisting its state in the
+**ID Partners Identity Object Model** (`idp-scim-service`) as Postgres JSONB object-class entries.
+The loopback stage exercises both sides at once: PF's transmitter push-delivers a signed SET to PF's
+own receiver endpoint, which verifies it and runs the grant-revocation action.
 
 ```
 ┌────────────────────────────┐         ┌──────────────────────────────┐
@@ -45,7 +47,9 @@ validated by RFC 7662 introspection) → stream CRUD → **SCIM provisioning dri
 verification SET minted/polled/ack'd → **PF logout emits a signed `caep.session-revoked` SET**
 (`LogoutEventFilter` over `/idp/init_logout.openid`) → **SCIM disable emits `risc.account-disabled`** →
 the state lives in `idm.entry` (peek: `docker compose exec ldm-store psql -U ldm -d ldm`) → **a PF
-restart loses nothing** (durability is Postgres's) → poll-ack semantics.
+restart loses nothing** (durability is Postgres's) → poll-ack semantics → **loopback push: logout →
+transmitter push (RFC 8935) → PF's own receiver verifies the SET and dispatches the grant-revocation
+action**.
 
 ## What's in the box
 
@@ -54,7 +58,7 @@ restart loses nothing** (durability is Postgres's) → poll-ack semantics.
 | `pf/Dockerfile` | Stock PF 13.0.3 + the module **merged into `pf-runtime.war`** (root context; the SSF logout filter registered in its web.xml by `assemble-pf-runtime-war.sh`) + the Postgres JDBC driver. No baked license — DevOps-fetched at boot. |
 | `ldm-store/init/` | `01` = the Identity Object Model DDL (from `idp-scim-service/spec`), `02` = the `0001-add-shared-signals-ssf` migration (classes `ssfStream`/`ssfStreamSubject`/`ssfPendingSet`, vocabularies, queue indexes). Applied on first `up`. |
 | `scripts/bootstrap-pf.sh` | Stock-PF first-run gates (license agreement + initial admin — the image's `83-configure-admin` hook is never invoked in STANDALONE mode, so this does its job) + OAuth config via the admin API. Idempotent. |
-| `scripts/probe-demo.sh` | The 10-stage end-to-end verification. |
+| `scripts/probe-demo.sh` | The 11-stage end-to-end verification (incl. the loopback push→receiver stage). |
 
 SSF configuration is **pure env** (`OIDF_SSF_*` in `docker-compose.yml`): issuer, `storeDialect=ldm`,
 direct JDBC URL, and the introspection client. No web.xml edits, no PF console clicking for the SSF side.
