@@ -111,6 +111,12 @@ class Handler(BaseHTTPRequestHandler):
             self._send(*pf("POST", "/ssf/subjects:add", body=b, bearer=token()))
         elif self.path == "/api/scim":
             self._send(*pf("POST", "/ssf/scim/v2/Users", body=b, bearer=token()))
+        elif self.path == "/api/scim-disable":
+            # disable is a SCIM replace (PUT active:false) — that's what emits risc.account-disabled
+            self._send(*pf("PUT", "/ssf/scim/v2/Users", body={
+                "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"],
+                "userName": b.get("userName", "bob"), "active": False,
+            }, bearer=token()))
         elif self.path == "/api/verify":
             self._send(*pf("POST", "/ssf/verify", body=b, bearer=token()))
         elif self.path == "/api/poll":
