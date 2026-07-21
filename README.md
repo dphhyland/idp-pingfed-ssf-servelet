@@ -24,8 +24,8 @@ The same stack runs publicly on Railway (project `ssf-demo`):
 - **Demo UI**: https://ssf-demo-ui-production.up.railway.app
 - **Transmitter metadata**: https://pingfederate-ssf-production.up.railway.app/.well-known/ssf-configuration
   (Railway's HTTPS edge terminates TLS onto PF's plain-HTTP runtime listener on 9080)
-- **PF admin API/console**: `https://sakura.proxy.rlwy.net:10816` (TCP proxy → 9999; credentials in the
-  `pingfederate-ssf` service variables — `PF_ADMIN_PW_DEMO`)
+- PF admin API/console: reachable via the service's TCP proxy (→ 9999); the proxy address and the
+  admin credentials (`PF_ADMIN_PW_DEMO`) live in the `pingfederate-ssf` Railway service variables
 - Store: the project's Postgres with the Identity Object Model schema; licensing DevOps-fetched at boot;
   client secret / push token are per-deploy randoms held in Railway service variables, never in git.
 
@@ -33,6 +33,8 @@ The same stack runs publicly on Railway (project `ssf-demo`):
 
 ```sh
 cp .env.example .env        # fill in your Ping DevOps credentials (licensing)
+# pf/*.jar is gitignored: build pf-oidf-modules.jar in the pf-oidf-modules repo
+# (mvn package) and copy it into pf/ before the first build
 docker compose up -d --build
 ./scripts/bootstrap-pf.sh   # one-time: license agreement, admin, ATM, mapping, ssf.manage scope, receiver client
 ./scripts/probe-demo.sh     # the end-to-end walk
