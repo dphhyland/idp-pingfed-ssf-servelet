@@ -13,7 +13,8 @@ services:
       POSTGRES_USER: ldm
       POSTGRES_PASSWORD: ldm
     volumes:
-      # 01 = the Identity Object Model DDL, 02 = the shared-signals (SSF) migration
+      # 01 = the Identity Object Model DDL, 02 = the shared-signals (SSF) migration,
+      # 03 = record the model ledger for both (pf-agentic-identity 0.7.0+ checks it)
       - ./ldm-store/init:/docker-entrypoint-initdb.d:ro
     ports:
       - "55432:5432"
